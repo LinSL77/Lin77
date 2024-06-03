@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Chatroom with Gemini API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            background-color: #333;
+            /* Dark background */
+            color: #ccc;
+            /* Light text */
+
+        }
+
+        h1 {
+            text-align: center;
+            color: #fff;
+            /* White text for headings */
+        }
+
+        #messageForm {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        #messageInput {
+            width: 70%;
+            padding: 10px;
+            border: 1px solid #555;
+            /* Darker borders */
+            background-color: #222;
+            /* Dark input fields */
+            color: #ddd;
+            /* Light text */
+            border-radius: 5px;
+            outline: none;
+        }
+
+        #messageInput:focus {
+            border-color: dodgerblue;
+        }
+
+        #messageInput::placeholder {
+            color: #777;
+            /* Darker placeholder */
+        }
+
+        #messageInput:focus::placeholder {
+            color: transparent;
+        }
+
+        #sendMessageBtn {
+            padding: 10px 20px;
+            background-color: #555;
+            /* Darker button */
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            outline: none;
+        }
+
+        #sendMessageBtn:hover {
+            background-color: #777;
+            /* Lighter on hover */
+        }
+
+        #messages {
+            padding: 0 20px;
+            overflow-y: scroll;
+            max-height: 300px;
+            background-color: #222;
+            /* Dark background for messages */
+        }
+
+        .message {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            color: #ccc;
+            /* Light text for messages */
+        }
+
+        .userMessage {
+            background-color: #444;
+            /* Darker user message */
+            text-align: right;
+        }
+
+        .botMessage {
+            background-color: #555;
+            /* Darker bot message */
+            text-align: left;
+        }
+
+        #startButton:hover {
+            background: rgba(0, 0, 0, 1);
+            /* Darker background on hover */
+            box-shadow: 0px 6px 15px rgba(0, 0, 0, 0.5);
+            /* Slightly larger shadow on hover */
+        }
+
+        #startButton {
+            padding: 15px 30px;
+            /* Increase padding for a better look */
+            font-size: 20px;
+            /* Adjust font size */
+            cursor: pointer;
+            /* Position it within the wrapper */
+            margin-bottom: 20px;
+            position: relative;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            /* Text color */
+            background: rgba(0, 0, 0, 0.8);
+            /* Same semi-transparent background as introBlock */
+            border: 1px solid #fff;
+            /* Same border as introBlock */
+            border-radius: 5px;
+            /* Rounded corners similar to introBlock */
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.3);
+            /* Subtle shadow for depth */
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Chatroom</h1>
+    <button id="startButton">Start Game</button>
+    <form id="messageForm">
+        <input type="text" id="messageInput" placeholder="Type your message here..." required>
+        <button id="sendMessageBtn" type="submit">Send</button>
+    </form>
+    <div id="sceneImage" style="text-align:center; margin-top:20px;">
+        <!-- 圖片將在這裡顯示 -->
+    </div>
+    <div id="messages"></div>
+    <script>
+        var conversationHistory = [];
+
+        var apiKey = prompt("Please enter your API key:", "");
+
+        if (!apiKey) {
+            alert("API key and name are required to use the chatroom.");
+        } else {
+            document.getElementById('messageForm').addEventListener('submit', function (event) {
+                event.preventDefault();
+                var message = document.getElementById('messageInput').value;
+
+                addToConversationHistory('user', message);
+                displayMessage(message, 'user');
+
+                fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=' + apiKey, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        "contents": conversationHistory,
+                        "safetySettings": [
+                            {
+                                "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                                "threshold": "BLOCK_ONLY_HIGH"
+                            },
+                            {
+                                "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                                "threshold": "BLOCK_ONLY_HIGH"
+                            },
+                        ],
+                        "generationConfig": {
+                            "stopSequences": [
+                                ""
+                            ],
+                            "temperature": 0.2,
+                            "maxOutputTokens": 2048,
+                            "topP": 0.8,
+                            "topK": 10
+                        }
+                    })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        var responseText = data.candidates[0].content.parts[0].text;
+                        addToConversationHistory('model', responseText);
+                        displayMessage(responseText, 'bot');
+                    })
+                    .catch(error => console.error('Error:', error));
+
+                document.getElementById('messageInput').value = '';
+            });
+        }
+
+        function addToConversationHistory(role, text) {
+            conversationHistory.push({
+                "role": role,
+                "parts": [{
+                    "text": text
+                }]
+            });
+        }
+
+        function displayMessage(message, sender) {
+            var messageElement = document.createElement('div');
+            var formatMessage = formatText(message);
+            messageElement.innerHTML = formatMessage;
+            messageElement.classList.add('message');
+            if (sender === 'user') {
+                messageElement.classList.add('userMessage');
+            } else {
+                messageElement.classList.add('botMessage');
+            }
+            document.getElementById('messages').appendChild(messageElement);
+            // Scroll to bottom
+            document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+            updateSceneImage(message);
+        }
+
+        function updateSceneImage(responseText) {
+            let sceneMatch = responseText.match(/地點：(.*?)\s/); // 使用正則表達式匹配場景描述
+            if (sceneMatch && sceneMatch[1]) {
+                let scene = sceneMatch[1];
+                console.log(scene);
+                // 檢查scene是否包含"宿舍"
+                if (scene.includes("警察局")) {
+                    document.getElementById('sceneImage').innerHTML = '<img src="./img/police station.jpeg" alt="police station" style="width:500px;">';
+                } else if (scene.includes("案發現場")) {
+                    document.getElementById('sceneImage').innerHTML = '<img src="./img/crime scene.jpeg" alt="crime scene" style="width:500px;">';
+                } else if (scene.includes("公寓")) {
+                    document.getElementById('sceneImage').innerHTML = '<img src="./img/apartment.jpeg" alt="apartment" style="width:500px;">';
+                } else if (scene.includes("警局辦公室")) {
+                        document.getElementById('sceneImage').innerHTML = '<img src="./img/office.jpeg" alt="office" style="width:500px;">';
+                } else if (scene.includes("警局審訊室")) {
+                        document.getElementById('sceneImage').innerHTML = '<img src="./img/interrogation room.jpeg" alt="interrogation room" style="width:500px;">';
+                }
+                else {
+                    // 如果不包含"宿舍"，可以在這裡處理其他情況或者不進行任何操作
+                    // 例如清空圖片或顯示預設圖片
+                    document.getElementById('sceneImage').innerHTML = ''; // 清空圖片
+                }
+            }
+        }
+
+        function formatText(text) {
+            let formattedText = text.replace(/\*\*(.*?)\*\*/g, '<br><strong>$1</strong>');
+
+            formattedText = formattedText.replace(/\*(.*?)\s/g, '<br>$1');
+
+            return formattedText;
+        }
+
+        document.getElementById('startButton').addEventListener('click', function () {
+            // 手動輸入劇本 --> 新增到 conversationHistory[] --> conversationHistory[] 送到 gemini api -->得到結果
+            // ---------------用程式做--------------------- --> conversationHistory[] 送到 gemini api -->得到結果
+            //讓程式自己輸入劇本
+            conversationHistory.push({
+                "role": 'user',
+                "parts": [{
+                    "text": `腳本：
+                        """
+                        遊戲標題：死亡筆記
+                        遊戲背景：
+                        瑪麗是一名警察實習生,在調查一起疑似自殺的案件時,意外發現了一本神秘的筆記本。這本筆記本似乎擁有讓人死亡的奇異力量。在追查筆記本的來歷時,瑪麗逐漸陷入一個充滿陰謀和危機的深淵之中。
+
+                        主要角色：
+                        瑪麗：警察實習生,負責調查自殺案件的主角。
+                        約翰：瑪麗的導師,一名資深警探。
+                        艾米莉：瑪麗的室友,善解人意。
+                        史蒂夫：嫌疑人之一,似乎對筆記本有所了解。
+
+                        遊戲劇情流程：
+                        開場：
+                        (場景：警察局)
+                        瑪麗是一名警察實習生,正在接受資深警探約翰的指導。某天,約翰找到瑪麗,告知她有一起可疑的自殺案件需要調查。
+                        選擇A：積極接受任務。（選擇後進入案件調查劇情）
+                        選擇B：對自己的能力表示擔憂。（選擇後進入案件調查劇情）
+                        選擇C：請求約翰給自己更多時間考慮。（選擇後進入案件調查劇情）
+
+                        案件調查：
+                        (場景：案發現場)
+                        瑪麗來到案發現場,在仔細勘查現場的過程中,她意外發現了一本奇怪的筆記本。瑪麗意識到這本筆記本可能蘊含著重要的線索。
+                        選擇A1：立即將筆記本交給約翰進一步調查。（選擇後進入秘密追查劇情）
+                        選擇A2：私下保留筆記本,自己先行研究。（選擇後進入秘密追查劇情）
+                        選擇B：將筆記本交給約翰,放棄深入調查。（選擇後進入秘密追查劇情）
+                        選擇C：詢問現場其他證人,試圖從中找到線索。（選擇後進入秘密追查劇情）
+
+                        秘密追查：
+                        (場景：公寓)
+                        在自己的公寓中,瑪麗仔細研究那本神秘的筆記本。她發現這本"死亡筆記本"擁有一些令人不可思議的特殊能力:只要寫下一個人的全名,並在心中默念其形象,這個人就會在短時間內死亡,死因也會在筆記本上同時註明。
+                        就在這時,室友艾米莉意外發現了瑪麗的行為。（選擇後進入意外發現劇情）
+                        選擇A：坦白告訴艾米莉,請求協助。（選擇後進入意外發現劇情）
+                        選擇B：隱瞞事實,獨自繼續調查。（選擇後進入意外發現劇情）
+                        選擇C：試圖說服艾米莉,希望她不要干涉。（選擇後進入意外發現劇情）
+
+                        意外發現：
+                        (場景：警局辦公室)
+                        通過一番細緻的調查,瑪麗終於發現了這本"死亡筆記本"的主人是一名叫史蒂夫的嫌疑人。
+                        據史蒂夫供述,這本筆記本還有一些詭異的規則,比如在寫下一個人的名字後,必須在60秒內完成整個過程,否則效果就會失效。另外,如果在寫完名字後不能在40秒內想象出這個人的樣子,也會導致筆記本失效。
+                        選擇A：立即向約翰報告,請求協助逮捕史蒂夫。（選擇後進入危機解除劇情）
+                        選擇B：私下聯繫史蒂夫,試圖了解筆記本的秘密。（選擇後進入危機解除劇情）
+                        選擇C：先自行對史蒂夫進行調查,再決定如何行動。（選擇後進入危機解除劇情）
+
+                        危機解除：
+                        (場景：警局審訊室)
+                        在瑪麗的配合下,警方成功逮捕了史蒂夫。通過審訊,他們得知這本"死亡筆記本"的來歷更加神秘 - 它是從一個神秘組織手中得到的,他們聲稱這本筆記本來自於一個叫"死神"的超自然存在。
+                        選擇A：要求參與後續的案件審理和調查。（選擇後進入結局）
+                        選擇B：表示自己已經足夠了解案件真相,不需要再參與。（選擇後進入結局）
+                        選擇C：請求約翰給予自己一些獨立調查的機會。（選擇後進入結局）
+
+                        結局：
+                        選擇A1 + A + A + A 結局：
+                        瑪麗成功協助警方逮捕了史蒂夫,並通過參與後續的案件審理和調查,進一步深入了解了"死亡筆記本"的詳細情況。她明白如果這種殺人工具落入不法分子手中,將會造成巨大的災難。在這個過程中,瑪麗展現出了出色的專業能力和積極主動的態度,贏得了約翰和艾米莉的充分信任,成長為一名出色的警探。
+
+                        選擇A2 + B + B + B 結局：
+                        瑪麗固執地私自調查"死亡筆記本"的秘密,最終還是被上級發現。她固執地隱瞞事實,最終受到了嚴厲的處罰。瑪麗意識到隱瞞真相的危害性,但由於之前的行為,她徹底失去了艾米莉和約翰的信任,必須重新贏回他們的尊重和支持。
+
+                        選擇B + C + A + C 結局：
+                        尚未完全自信的瑪麗選擇將筆記本交給約翰,並請求給自己更多時間。在後續的審訊過程中,她爭取參與調查,希望能夠獨立探索案件真相。雖然過程比較艱辛,但最終瑪麗還是建立了與約翰和艾米莉之間的理解,成長為一名更加自信的警探。她意識到要成為一名出色的警探,需要專業能力、勇氣和主動探索的精神。
+
+                        遊戲結尾：
+                        通過這次案件的經歷,無論瑪麗最終選擇了哪條道路,她都收穫了寶貴的教訓。她明白,要成為一名優秀的警探,需要兼具專業知識、主動探索精神和正直品格。只有堅持正義,坦誠面對,她才能更好地服務社會,捍衛法律。這份經歷必將成為瑪麗未來事業發展的重要基石。
+
+                        請根據腳本中的對話，根據"""開場"""到"""案件調查"""到"""秘密追查"""到"""意外發現"""最後到"""危機解除"""進行，開始一個文字冒險遊戲，每一次的對話，都需要呈現以下格式與資訊：
+                        <地點>：目前故事的背景為何
+                        <場景>：目前故事內容
+                        <選擇>：在每一次的對話中，你都會根據腳本給我可以選擇的動作，根據我選擇的動作繼續接下來的劇情，整體劇情會圍繞腳本發展。
+
+                        根據我的選擇進行故事就好，不要幫我做出選擇`
+                }]
+            })
+
+            //呼叫api
+            fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=' + apiKey, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    "contents": conversationHistory,
+                    "safetySettings": [
+                        {
+                            "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                            "threshold": "BLOCK_NONE"
+                        },
+                        {
+                            "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                            "threshold": "BLOCK_NONE"
+                        },
+                    ],
+                    "generationConfig": {
+                        "stopSequences": [
+                            ""
+                        ],
+                        "temperature": 0.2,
+                        "maxOutputTokens": 2048,
+                        "topP": 0.8,
+                        "topK": 10
+                    }
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    console.log(conversationHistory);
+                    var responseText = data.candidates[0].content.parts[0].text;
+                    addToConversationHistory('model', responseText);
+                    displayMessage(responseText, 'bot');
+                })
+                .catch(error => console.error('Error:', error));
+        });
+    </script>
+</body>
+
+</html>
