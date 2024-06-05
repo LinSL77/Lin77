@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Chatroom with Gemini API</title>
+    <style>
+        body {
+            color: white;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: #000;
+            /* Default background in case image doesn't load */
+        }
+
+        #backgroundWrapper {
+            width: 80vw;
+            /* Use viewport width units */
+            max-width: 800px;
+            /* Maximum width remains 800px */
+            height: 80vw;
+            /* Height is set to be the same in viewport width units, approximating the width */
+            max-height: 800px;
+            /* Maximum height to match the maximum width */
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            background-image: url('./img/detective2.jpg');
+            /* Replace with your image path */
+            background-size: contain;
+            /* Ensures the image is fully visible without stretching */
+            background-repeat: no-repeat;
+            background-position: center;
+        }
+
+        #gameContainer {
+            width: 100%;
+            /* Takes the full width of the background wrapper */
+            height: 200px;
+            /* Adjusted height to position at the bottom of the image */
+            background: rgba(0, 0, 0, 0.8);
+            /* Semi-transparent black background */
+            padding: 10px;
+            display: none;
+            box-sizing: border-box;
+            border: 1px solid #fff;
+            overflow: hidden;
+        }
+
+        #messages {
+            height: 80%;
+            overflow-y: auto;
+            margin-bottom: 10px;
+        }
+
+        .message {
+            margin: 5px 0;
+        }
+
+        .userMessage {
+            color: #0f0;
+        }
+
+        .botMessage {
+            color: #ff0;
+        }
+
+        #messageInput {
+            width: 100%;
+            padding: 10px;
+            box-sizing: border-box;
+            background: transparent;
+            border: none;
+            border-top: 1px solid #fff;
+            color: white;
+            font-size: 16px;
+        }
+
+        #startButton, #introButton {
+            padding: 15px 30px;
+            /* Increase padding for a better look */
+            font-size: 20px;
+            /* Adjust font size */
+            cursor: pointer;
+            /* Position it within the wrapper */
+            margin-bottom: 20px;
+            color: white;
+            /* Text color */
+            background: rgba(0, 0, 0, 0.8);
+            /* Same semi-transparent background as introBlock */
+            border: 1px solid #fff;
+            /* Same border as introBlock */
+            border-radius: 5px;
+            /* Rounded corners similar to introBlock */
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.3);
+            /* Subtle shadow for depth */
+            transition: all 0.3s ease;
+            /* Smooth transition for hover effects */
+        }
+
+        #startButton:hover,
+        #introButton:hover {
+            background: rgba(0, 0, 0, 1);
+            /* Darker background on hover */
+            box-shadow: 0px 6px 15px rgba(0, 0, 0, 0.5);
+            /* Slightly larger shadow on hover */
+            transform: scale(1.05);
+            /* Slightly enlarge on hover */
+        }
+
+        #introBlock {
+            width: 80%;
+            max-width: 600px;
+            background: rgba(0, 0, 0, 0.8);
+            /* Semi-transparent background */
+            padding: 20px;
+            box-sizing: border-box;
+            border: 1px solid #fff;
+            margin-bottom: 20px;
+            /* Space between intro block and start button */
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            display: none;
+            /* Initially hidden */
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        #playButton, #pauseButton {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            margin-right: 10px;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        #pauseButton {
+            left: 120px;
+            background-color: #f44336;
+        }
+        #playButton:hover, #pauseButton:hover {
+            background-color: #45a049;
+        }
+        #pauseButton:hover {
+            background-color: #e53935;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="introBlock">
+        <h2>歡迎來到《謎樣》</h2>
+        <p>在《謎樣》中，你將扮演一位對於滿腔熱血但經驗不足的菜鳥警察實習生，請幫助她在實習中學習，並順利解決案件。</p>
+        <button id="startButton">Start Game</button>
+    </div>
+    <div id="backgroundWrapper">
+        <button id="introButton">遊戲介紹</button>
+        <div id="gameContainer">
+            <div id="messages"></div>
+            <form id="messageForm">
+                <input type="text" id="messageInput" placeholder="Type your command...">
+            </form>
+        </div>
+    </div>
+    <button id="playButton">播放音樂</button>
+    <button id="pauseButton">暫停音樂</button>
+</body>
+<script>
+        var sound = new Howl({
+            src: ['Y2DL_See_The_Fantasy.mp3'],
+            loop: true
+        });
+
+        document.getElementById('playButton').addEventListener('click', function() {
+            sound.play();
+        });
+
+        document.getElementById('pauseButton').addEventListener('click', function() {
+            sound.pause();
+        });
+
+    var conversationHistory = [];
+
+    var apiKey = prompt("Please enter your API key:", "");
+    var userName = prompt("Please enter your name:", "");
+
+    if (!apiKey || !userName) {
+        alert("API key and name are required to use the chatroom.");
+        // Optionally, redirect or disable form
+    } else {
+        document.getElementById('messageForm').addEventListener('submit', function (event) {
+            event.preventDefault();
+            var inputElement = document.getElementById('messageInput');
+            var message = inputElement.value;
+
+            addToConversationHistory('user', message);
+            displayMessage(message, 'user');
+            inputElement.disabled = true;
+            fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=' + apiKey, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    "contents": conversationHistory,
+                    "safetySettings": [
+                        {
+                            "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                            "threshold": "BLOCK_NONE"
+                        },
+                        {
+                            "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                            "threshold": "BLOCK_NONE"
+                        },
+                    ],
+                    "generationConfig": {
+                        "stopSequences": [
+                            ""
+                        ],
+                        "temperature": 0.2,
+                        "maxOutputTokens": 2048,
+                        "topP": 0.8,
+                        "topK": 10
+                    }
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    var responseText = data.candidates[0].content.parts[0].text;
+                    addToConversationHistory('model', responseText);
+                    displayMessage(responseText, 'bot');
+                    inputElement.disabled = false;
+                })
+                .catch(error => {
+                    console.error('Error:', error)
+                    inputElement.disabled = false;
+                });
+
+            document.getElementById('messageInput').value = '';
+        });
+    }
+
+    function addToConversationHistory(role, text) {
+        conversationHistory.push({
+            "role": role,
+            "parts": [{
+                "text": text
+            }]
+        });
+    }
+
+    function displayMessage(message, sender) {
+        var messageElement = document.createElement('div');
+        var formatMessage = formatText(message);
+        messageElement.classList.add('message');
+        if (sender === 'user') {
+            messageElement.classList.add('userMessage');
+        } else {
+            messageElement.classList.add('botMessage');
+        }
+        document.getElementById('messages').appendChild(messageElement);
+        updateSceneImage(message);
+        // Function to display the text one character at a time
+        function typeText(element, text, index) {
+            if (index < text.length) {
+                let char = text[index];
+                if (char === '<') {
+                    let endIndex = text.indexOf('>', index);
+                    if (endIndex !== -1) {
+                        element.innerHTML += text.substring(index, endIndex + 1);
+                        index = endIndex + 1;
+                    }
+                } else {
+                    element.innerHTML += char;
+                    index++;
+                }
+                setTimeout(function () {
+                    typeText(element, text, index);
+                }, 75); // Adjust typing speed by changing the delay (in milliseconds)
+            } else {
+                // Scroll to bottom after the entire message is displayed
+                document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+            }
+        }
+
+        // Start typing the formatted message
+        typeText(messageElement, formatMessage, 0);
+    }
+
+    function updateSceneImage(responseText) {
+        let sceneMatch = responseText.match(/地點(.*?)\s/); // 使用正則表達式匹配場景描述
+        if (sceneMatch && sceneMatch[1]) {
+            let scene = sceneMatch[1];
+            console.log(scene);
+            // 檢查scene是否包含"宿舍"
+            if (scene.includes("警察局")) {
+                document.getElementById('backgroundWrapper').style.backgroundImage = "url('./img/police station.jpeg')";
+            } else if (scene.includes("案發現場")) {
+                document.getElementById('backgroundWrapper').style.backgroundImage = "url('./img/crime scene.jpeg')";
+            } else if (scene.includes("公寓")) {
+                document.getElementById('backgroundWrapper').style.backgroundImage = "url('./img/apartment.jpeg')";
+            } else if (scene.includes("警局辦公室")) {
+                document.getElementById('backgroundWrapper').style.backgroundImage = "url('./img/office.jpeg')";
+            } else if (scene.includes("警局審訊室")) {
+                document.getElementById('backgroundWrapper').style.backgroundImage = "url('./img/interrogation room.jpeg')";
+            }
+        }
+    }
+
+    function formatText(text) {
+        // Replace ** with a new line and bold tag
+        let formattedText = text.replace(/\*\*(.*?)\*\*/g, '<br><strong>$1</strong>');
+
+        // Replace * with a new line and bullet point
+        formattedText = formattedText.replace(/\*(.*?)\s/g, '<br>$1');
+
+        return formattedText;
+    }
+
+    document.getElementById('introButton').addEventListener('click', function () {
+        document.getElementById('introBlock').style.display = 'block';
+        this.style.display = 'none'; // Hide the intro button
+        document.getElementById('startButton').style.display = 'block'; // Show the start button
+    });
+
+    document.getElementById('startButton').addEventListener('click', function () {
+        // Change background image and display settings when starting the game
+        document.getElementById('backgroundWrapper').style.backgroundImage = "url('./img/police station.jpeg')";
+        document.getElementById('introBlock').style.display = 'none'; // Show the game container
+        document.getElementById('gameContainer').style.display = 'inline';
+        document.getElementById('introButton').style.display = 'none'; // Hide the start button
+
+        conversationHistory.push({
+            "role": 'user',
+            "parts": [{
+                "text": `腳本：
+                        """
+                        遊戲標題：死亡筆記
+                        遊戲背景：
+                        ${userName}是一名警察實習生,在調查一起疑似自殺的案件時,意外發現了一本神秘的筆記本。這本筆記本似乎擁有讓人死亡的奇異力量。在追查筆記本的來歷時,${userName}逐漸陷入一個充滿陰謀和危機的深淵之中......
+
+                        主要角色：
+                        ${userName}：主角,負責調查自殺案件的警察實習生。
+                        約翰：${userName}的導師,一名資深警探。
+                        艾米莉：${userName}的室友,善解人意。
+                        史蒂夫：嫌疑人之一,似乎對筆記本有所了解。
+
+                        遊戲腳本流程
+                        開場：
+                        (場景：警察局)
+                        內容：${userName}是一名警察實習生,正在接受資深警探約翰的指導。某天,約翰找到${userName},告知${userName}有一起可疑的自殺案件需要調查。
+                        選擇A1：積極接受任務。（選擇後進入案件調查劇情）
+                        選擇A2：對自己的能力表示擔憂。（選擇後進入案件調查劇情）
+
+                        若選擇A2：
+                        鼓勵：
+                        (場景：警察局)
+                        內容：約翰鼓勵${userName}這是初學者常見的現象，他會在一旁協助${userName}處理這個案件。
+                        選擇A2-1：打起精神，願意嘗試。（選擇後進入案件調查劇情）
+                        選擇A2-2：充滿勇氣，相信自己絕對可以!!!（選擇後進入案件調查劇情）
+
+                        若選擇A1 或 A2-1 或 A2-2：
+                        案件調查：
+                        (場景：案發現場)
+                        內容：${userName}來到案發現場,在仔細勘查現場的過程中,${userName}意外發現了一本奇怪的筆記本。${userName}意識到這本筆記本可能蘊含著重要的線索。
+                        選擇B1：立即將筆記本交給約翰進一步調查。（選擇後進入意外發現劇情）
+                        選擇B2：私下保留筆記本,自己先行研究。（選擇後進入秘密追查劇情）
+                        
+                        若選擇B2：
+                        秘密追查：
+                        (場景：公寓)
+                        內容：在自己的公寓中,${userName}仔細研究那本神秘的筆記本。${userName}發現這本"死亡筆記本"擁有一些令人不可思議的特殊能力:只要寫下一個人的全名,並在心中默念其形象,這個人就會在短時間內死亡,死因也會在筆記本上同時註明。就在這時,室友艾米莉意外發現了${userName}的行為。
+                        選擇C1：坦白告訴艾米莉,請求協助。（選擇後進入意外發現劇情）
+                        選擇C2：隱瞞事實,獨自繼續調查。（選擇後進入意外發現劇情）
+
+                        若選擇B1 或 C1 或 C2：
+                        意外發現：
+                        (場景：警局辦公室)
+                        內容：通過一番細緻的調查,${userName}終於發現了這本"死亡筆記本"的主人是一名叫史蒂夫的嫌疑人。據史蒂夫供述,這本筆記本還有一些詭異的規則,比如在寫下一個人的名字後,必須在60秒內完成整個過程,否則效果就會失效。另外,如果在寫完名字後不能在40秒內想象出這個人的樣子,也會導致筆記本失效。
+                        選擇D1：立即更新進度,並請求協助逮捕史蒂夫。（選擇後進入危機解除劇情）
+                        選擇D2：先自行對史蒂夫進行調查,再決定如何行動。（選擇後進入危機解除劇情）
+
+                        危機解除：
+                        (場景：警局審訊室)
+                        內容：在${userName}的配合下,警方成功逮捕了史蒂夫。通過審訊,他們得知這本"死亡筆記本"的來歷更加神秘 - 它是從一個神秘組織手中得到的,他們聲稱這本筆記本來自於一個叫"死神"的超自然存在。
+                        選擇E1：要求參與後續的案件審理和調查。（選擇後進入結局）
+                        選擇E2：請求約翰給予自己一些獨立調查的機會。（選擇後進入結局）
+
+                        結局：
+                        選擇  A1+B1或 A1+B2+C1+D1  的結局：
+                        ${userName}成功協助警方逮捕了史蒂夫,並通過參與後續的案件審理和調查,進一步深入了解了"死亡筆記本"的詳細情況。${userName}明白如果這種殺人工具落入不法分子手中,將會造成巨大的災難。在這個過程中,${userName}展現出了出色的專業能力和積極主動的態度,贏得了約翰和艾米莉的充分信任,成長為一名出色的警探。
+
+                        選擇  B2+C2或 A1+B2+C1+D2 或 A2+B2+C1+D2  的結局：
+                        ${userName}固執地私自調查"死亡筆記本"的秘密,最終還是被上級發現。 ${userName}固執地隱瞞事實,最終受到了嚴厲的處罰。${userName}意識到隱瞞真相的危害性,但由於之前的行為,${userName}徹底失去了艾米莉和約翰的信任,必須重新贏回他們的尊重和支持。
+
+                        選擇  A2+B1或 A2+B2+C1+D1  的結局：
+                        尚未完全自信的${userName}選擇將筆記本交給約翰,並請求給自己更多時間。在後續的審訊過程中,她爭取參與調查,希望能夠獨立探索案件真相。雖然過程比較艱辛,但最終${userName}還是建立了與約翰和艾米莉之間的理解,成長為一名更加自信的警探。${userName}意識到要成為一名出色的警探,需要專業能力、勇氣和主動探索的精神。
+
+
+                        遊戲結尾：
+                        通過這次案件的經歷,無論${userName}最終選擇了哪條道路,${userName}都收穫了寶貴的經驗。${userName}明白,要成為一名優秀的警探,需要兼具專業知識、主動探索精神和正直品格。只有堅持正義,坦誠面對,她才能更好地服務社會,捍衛法律。這份經歷必將成為${userName}未來事業發展的重要基石。"""
+
+                        請根據腳本中的對話，根據"""開場"""到"""案件調查"""到"""秘密追查"""到"""意外發現"""最後到"""危機解除"""進行，開始一個文字冒險遊戲，每一次的對話，都需要依照以下格式與資訊呈現：
+                        <地點>：目前故事的背景
+                        <場景>：完整呈現目前故事的內容
+                        <選擇>：在每一次的對話中，你要根據腳本給我可以選擇的動作，根據我選擇的動作繼續接下來的劇情，整體劇情會根據腳本發展。
+
+                        根據我的選擇進行故事就好，不要幫我做出任何選擇`
+            }]
+        })
+        fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=' + apiKey, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                "contents": conversationHistory,
+                "safetySettings": [
+                    {
+                        "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                        "threshold": "BLOCK_NONE"
+                    },
+                    {
+                        "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                        "threshold": "BLOCK_NONE"
+                    },
+                ],
+                "generationConfig": {
+                    "stopSequences": [
+                        ""
+                    ],
+                    "temperature": 0.2,
+                    "maxOutputTokens": 2048,
+                    "topP": 0.8,
+                    "topK": 10
+                }
+            })
+        })
+            .then(response => response.json())
+            .then(data => {
+                console.log(conversationHistory);
+                var responseText = data.candidates[0].content.parts[0].text;
+                addToConversationHistory('model', responseText);
+                displayMessage(responseText, 'bot');
+            })
+            .catch(error => console.error('Error:', error));
+    });
+
+
+
+</script>
+
+</html>
